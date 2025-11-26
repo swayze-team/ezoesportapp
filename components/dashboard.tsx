@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -13,18 +13,49 @@ import { FortniteNews } from "@/components/fortnite-news"
 import { Leaderboard } from "@/components/leaderboard"
 import { Analytics } from "@/components/analytics"
 import { TicketSystem } from "@/components/ticket-system"
+import { AdminPanel } from "@/components/admin-panel"
 
 interface DashboardProps {
   user: any
   onLogout: () => void
 }
 
-type View = "dashboard" | "tracker" | "history" | "chat" | "settings" | "news" | "leaderboard" | "analytics" | "tickets"
+type View =
+  | "dashboard"
+  | "tracker"
+  | "history"
+  | "chat"
+  | "settings"
+  | "news"
+  | "leaderboard"
+  | "analytics"
+  | "tickets"
+  | "admin"
 
 export function Dashboard({ user, onLogout }: DashboardProps) {
   const [currentView, setCurrentView] = useState<View>("dashboard")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [unreadTickets] = useState(3) // Added ticket notifications
+  const [unreadTickets, setUnreadTickets] = useState(0)
+
+  useEffect(() => {
+    const loadTicketCount = async () => {
+      try {
+        const userToken = localStorage.getItem("eoz_user_token")
+        if (userToken) {
+          const response = await fetch(`/api/tickets?token=${userToken}`)
+          if (response.ok) {
+            const data = await response.json()
+            const openTickets =
+              data.tickets?.filter((t: any) => t.status === "open" || t.status === "in-progress").length || 0
+            setUnreadTickets(openTickets)
+          }
+        }
+      } catch (error) {
+        console.error("[v0] Error loading ticket count:", error)
+      }
+    }
+    loadTicketCount()
+  }, [currentView])
 
   const menuItems = [
     {
@@ -74,7 +105,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            d="M9 19l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138z"
+            d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
           />
         </svg>
       ),
@@ -91,8 +122,26 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           />
         </svg>
       ),
-      badge: unreadTickets,
+      badge: unreadTickets > 0 ? unreadTickets : undefined,
     },
+    ...(user.isAdmin
+      ? [
+          {
+            id: "admin" as View,
+            label: "Admin Panel",
+            icon: (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                />
+              </svg>
+            ),
+            adminOnly: true,
+          },
+        ]
+      : []),
     {
       id: "history" as View,
       label: "Historique",
@@ -160,6 +209,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         return <TeamChat user={user} />
       case "tickets":
         return <TicketSystem user={user} />
+      case "admin":
+        return user.isAdmin ? <AdminPanel user={user} /> : <DashboardHome user={user} />
       case "settings":
         return <Settings user={user} onLogout={onLogout} />
       default:
@@ -168,18 +219,18 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-background flex flex-col md:flex-row">
       <aside
-        className={`${sidebarCollapsed ? "w-20" : "w-72"} bg-card border-r border-border flex flex-col transition-all duration-300 scrollbar-thin overflow-y-auto`}
+        className={`${sidebarCollapsed ? "md:w-20" : "md:w-72"} w-full md:min-h-screen bg-card border-b md:border-r border-border flex flex-col transition-all duration-300 scrollbar-thin overflow-y-auto`}
       >
         {/* Logo */}
-        <div className="p-6 border-b border-border">
+        <div className="p-4 md:p-6 border-b border-border">
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-primary via-primary to-accent p-3 rounded-xl shadow-lg hover:scale-105 transition-transform">
+              <div className="bg-gradient-to-br from-primary via-primary to-accent p-3 rounded-xl shadow-lg hover:scale-105 transition-transform border border-primary/30 relative">
+                <div className="absolute inset-0 bg-primary blur-xl opacity-30 rounded-xl"></div>
                 <svg
-                  className="w-7 h-7 text-primary-foreground"
+                  className="w-7 h-7 text-primary-foreground relative z-10"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -189,13 +240,13 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                 </svg>
               </div>
               <div>
-                <h1 className="font-bold text-xl text-foreground tracking-tight">EOZ ESPORT</h1>
-                <p className="text-xs text-muted-foreground font-medium">Elite Platform</p>
+                <h1 className="font-black text-xl text-foreground tracking-tight text-display">EOZ ESPORT</h1>
+                <p className="text-xs text-muted-foreground font-bold tracking-wide uppercase">Elite Platform</p>
               </div>
             </div>
           ) : (
-            <div className="flex justify-center">
-              <div className="bg-gradient-to-br from-primary to-accent p-3 rounded-xl hover:scale-110 transition-transform">
+            <div className="hidden md:flex justify-center">
+              <div className="bg-gradient-to-br from-primary to-accent p-3 rounded-xl hover:scale-110 transition-transform border border-primary/30">
                 <svg
                   className="w-7 h-7 text-primary-foreground"
                   fill="none"
@@ -211,31 +262,34 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-3 md:p-4 space-y-1 md:space-y-2">
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setCurrentView(item.id)}
-              className={`relative w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-semibold text-sm ${
+              className={`relative w-full flex items-center gap-3 px-3 md:px-4 py-3 md:py-3.5 rounded-xl transition-all font-bold text-xs sm:text-sm ${
                 currentView === item.id
-                  ? "bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-lg shadow-primary/30 scale-[1.02]"
+                  ? "bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-lg shadow-primary/30 scale-[1.02] border border-primary/30"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground hover:scale-[1.01]"
               }`}
               title={sidebarCollapsed ? item.label : undefined}
             >
-              <span>{item.icon}</span>
-              {!sidebarCollapsed && <span>{item.label}</span>}
+              <span className="flex-shrink-0">{item.icon}</span>
+              {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
               {item.badge && item.badge > 0 && (
-                <Badge className="ml-auto bg-destructive text-destructive-foreground text-xs h-5 min-w-[20px] px-1.5">
+                <Badge className="ml-auto bg-destructive text-destructive-foreground text-xs h-5 min-w-[20px] px-1.5 animate-pulse">
                   {item.badge}
                 </Badge>
+              )}
+              {(item as any).adminOnly && (
+                <Badge className="ml-auto bg-accent text-accent-foreground text-xs h-5 px-2 font-bold">ADMIN</Badge>
               )}
             </button>
           ))}
         </nav>
 
-        {/* Collapse Button */}
-        <div className="p-4 border-t border-border">
+        {/* Collapse Button - Desktop only */}
+        <div className="hidden md:block p-4 border-t border-border">
           <Button
             variant="ghost"
             size="sm"
@@ -254,32 +308,35 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </Button>
         </div>
 
-        {/* User Profile */}
         <div className="p-4 border-t border-border bg-secondary/30">
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-3">
-              <Avatar className="h-11 w-11 border-2 border-primary/30 hover:border-primary transition-colors">
-                <AvatarImage
-                  src={user.avatar || `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`}
-                  alt={user.username}
-                />
-                <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground font-bold text-sm">
+              <Avatar className="h-12 w-12 border-2 border-primary/40 hover:border-primary transition-colors ring-2 ring-primary/20">
+                <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.username} />
+                <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground font-black text-sm">
                   {user.username.substring(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-foreground truncate">{user.username}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-sm text-foreground truncate">{user.username}</p>
+                  {user.isAdmin && (
+                    <Badge className="bg-accent text-accent-foreground text-[10px] px-1.5 py-0 h-4 font-bold">
+                      ADMIN
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-lg shadow-green-500/50"></div>
-                  <p className="text-xs text-muted-foreground font-medium">En ligne</p>
+                  <p className="text-xs text-muted-foreground font-semibold">En ligne</p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="flex justify-center">
-              <Avatar className="h-11 w-11 border-2 border-primary/30 hover:border-primary transition-colors hover:scale-110">
+            <div className="hidden md:flex justify-center">
+              <Avatar className="h-12 w-12 border-2 border-primary/40 hover:border-primary transition-colors hover:scale-110 ring-2 ring-primary/20">
                 <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.username} />
-                <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground font-bold">
+                <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground font-black">
                   {user.username.substring(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
